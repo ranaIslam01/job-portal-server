@@ -24,11 +24,12 @@ async function run() {
   try {
     // Connect to MongoDB
     await client.connect();
-    
+
     // ডাটবেজ এবং কালেকশন ডিফাইন করা
     const db = client.db("careerCode");
     const jobCollection = db.collection("jobs");
-    const applicationCollection = db.collection("job_applications"); // এই কালেকশনটি ফিক্স করা হয়েছে
+    const applicationCollection = db.collection("job_applications");
+    const jobPostCollection = db.collection("job_post");
 
     // ১. সবগুলো জব পাওয়ার এপিআই
     app.get("/jobs", async (req, res) => {
@@ -69,21 +70,45 @@ async function run() {
         res.status(500).send({ error: "Failed to submit application" });
       }
     });
-    app.get("/job-applications", async(req,res) => {
+
+
+    app.post("/job-post", async (req, res) => {
+      try {
+        const jobPost = req.body;
+        const result = await jobPostCollection.insertOne(jobPost);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to sumbit Job Post" });
+      }
+    });
+
+    app.get("/job-post", async (req,res) => {
       try{
-        const cursor = applicationCollection.find();
+        const cursor = jobPostCollection.find();
         const result = await cursor.toArray();
         res.send(result);
       }
-      catch(error){
-        res.status(500).send({error: "falid to fetch applcation"});
+      catch(error) {
+        res.status(500).send({error: "faild to fetch Job Post"})
       }
     })
 
+
+    app.get("/job-applications", async (req, res) => {
+      try {
+        const cursor = applicationCollection.find();
+        const result = await cursor.toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "falid to fetch application" });
+      }
+    });
+
     // MongoDB Connection Confirmation
     await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
-
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!"
+    );
   } catch (error) {
     console.error("MongoDB Connection Error:", error);
   }
