@@ -1,43 +1,102 @@
-const { MongoClient, ServerApiVersion } = require('mongodb');
-const express = require('express')
-const app = express()
-const port = 3000
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const express = require("express");
+const cors = require("cors");
+const app = express();
+const port = process.env.PORT || 3000;
+require("dotenv").config();
 
 // middleware
 app.use(cors());
 app.use(express.json());
 
-const uri = "mongodb+srv://<db_username>:<db_password>@mordancluster.s5spyh0.mongodb.net/?appName=MordanCluster";
+// MongoDB Connection URI
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@mordancluster.s5spyh0.mongodb.net/?appName=MordanCluster`;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
-  }
+  },
 });
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
+    // Connect to MongoDB
     await client.connect();
-    // Send a ping to confirm a successful connection
+    
+    // ডাটবেজ এবং কালেকশন ডিফাইন করা
+    const db = client.db("careerCode");
+    const jobCollection = db.collection("jobs");
+    const applicationCollection = db.collection("job_applications"); // এই কালেকশনটি ফিক্স করা হয়েছে
+
+    // ১. সবগুলো জব পাওয়ার এপিআই
+    app.get("/jobs", async (req, res) => {
+      const cursor = jobCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    // ২. নির্দিষ্ট একটি জব পাওয়ার এপিআই (Single Job)
+    app.get("/jobs/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        // আইডি ভ্যালিডেশন (BSONError সমাধান করবে)
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).send({ error: "Invalid ID format" });
+        }
+
+        const query = { _id: new ObjectId(id) };
+        const result = await jobCollection.findOne(query);
+
+        if (!result) {
+          return res.status(404).send({ message: "Job not found" });
+        }
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "Internal Server Error" });
+      }
+    });
+
+    // ৩. জব অ্যাপ্লিকেশন সেভ করার এপিআই (POST Method)
+    app.post("/job-applications", async (req, res) => {
+      try {
+        const application = req.body;
+        const result = await applicationCollection.insertOne(application);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to submit application" });
+      }
+    });
+    app.get("/job-applications", async(req,res) => {
+      try{
+        const cursor = applicationCollection.find();
+        const result = await cursor.toArray();
+        res.send(result);
+      }
+      catch(error){
+        res.status(500).send({error: "falid to fetch applcation"});
+      }
+    })
+
+    // MongoDB Connection Confirmation
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
-  } finally {
-    // Ensures that the client will close when you finish/error
-   //  await client.close();
+
+  } catch (error) {
+    console.error("MongoDB Connection Error:", error);
   }
 }
+
 run().catch(console.dir);
 
+// Root API
+app.get("/", (req, res) => {
+  res.send("Job Portal Server is Running...");
+});
 
-
-app.get('/', (req, res) => {
-  res.send('Hello World!')
-})
-
+// Start Server
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`)
-})
+  console.log(`Server is listening on port ${port}`);
+});
