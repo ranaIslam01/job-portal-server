@@ -179,6 +179,18 @@ async function run() {
       }
     });
 
+    // ৮. নির্দিষ্ট জব পোস্ট ডিলিট করা (এটি আপনার ব্যাকএন্ডে যোগ করুন)
+    app.delete("/job-post/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await jobPostCollection.deleteOne(query);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to delete job post" });
+      }
+    });
+
     // MongoDB Connection Confirmation
     await client.db("admin").command({ ping: 1 });
     console.log(
