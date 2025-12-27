@@ -9,7 +9,7 @@ require("dotenv").config();
 // middleware
 app.use(
   cors({
-    origin: ["https://job-portal-client-rana.vercel.app/"],
+    origin: ["https://job-portal-client-rana.vercel.app"],
     credentials: true,
   })
 );
