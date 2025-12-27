@@ -1,12 +1,18 @@
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 const app = express();
 const port = process.env.PORT || 3000;
 require("dotenv").config();
 
 // middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: ["http://localhost:5173"],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // MongoDB Connection URI
@@ -30,6 +36,25 @@ async function run() {
     const jobCollection = db.collection("jobs");
     const applicationCollection = db.collection("job_applications");
     const jobPostCollection = db.collection("job_post");
+
+    // jwt token related api
+    app.post("/jwt", async (req, res) => {
+      const { email } = req.body;
+      const user = { email };
+      const token = jwt.sign(user, process.env.JWT_ACCESS_SECRET, {
+        expiresIn: "1h",
+      });
+
+      // set token in the cookie
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "None",
+        maxAge: 60 * 60 * 1000, // 1 hour
+      });
+
+      res.send({ success: true });
+    });
 
     // ১. সবগুলো জব পাওয়ার এপিআই
     app.get("/jobs", async (req, res) => {
@@ -71,6 +96,26 @@ async function run() {
       }
     });
 
+    app.get("/job-applications", async (req, res) => {
+      try {
+        const cursor = applicationCollection.find();
+        const result = await cursor.toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "falid to fetch application" });
+      }
+    });
+
+    app.delete("/job-applications/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await applicationCollection.deleteOne(query);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to delete application" });
+      }
+    });
 
     app.post("/job-post", async (req, res) => {
       try {
@@ -82,25 +127,38 @@ async function run() {
       }
     });
 
-    app.get("/job-post", async (req,res) => {
-      try{
+    app.get("/job-post", async (req, res) => {
+      try {
         const cursor = jobPostCollection.find();
         const result = await cursor.toArray();
         res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "faild to fetch Job Post" });
       }
-      catch(error) {
-        res.status(500).send({error: "faild to fetch Job Post"})
-      }
-    })
+    });
 
+    // ৬. নির্দিষ্ট জব পোস্ট আপডেট করার এপিআই
+    app.patch("/job-post/:id", async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          title: updatedData.title,
+          company: updatedData.company,
+          category: updatedData.category,
+          jobType: updatedData.jobType,
+          salary: updatedData.salary,
+          location: updatedData.location,
+          description: updatedData.description,
+        },
+      };
 
-    app.get("/job-applications", async (req, res) => {
       try {
-        const cursor = applicationCollection.find();
-        const result = await cursor.toArray();
+        const result = await jobPostCollection.updateOne(filter, updateDoc);
         res.send(result);
       } catch (error) {
-        res.status(500).send({ error: "falid to fetch application" });
+        res.status(500).send({ error: "Failed to update job" });
       }
     });
 
