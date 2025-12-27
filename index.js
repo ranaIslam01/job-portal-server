@@ -9,7 +9,10 @@ require("dotenv").config();
 // middleware
 app.use(
   cors({
-    origin: ["https://job-portal-client-rana.vercel.app"],
+    origin: [
+      "http://localhost:5173",
+      "https://job-portal-client-rana.vercel.app",
+    ],
     credentials: true,
   })
 );
@@ -178,7 +181,9 @@ async function run() {
 
     // MongoDB Connection Confirmation
     await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!"
+    );
   } catch (error) {
     console.error("MongoDB Connection Error:", error);
   }
