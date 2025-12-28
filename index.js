@@ -2,11 +2,13 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
-const app = express();
-const port = process.env.PORT || 3000;
+const cookieParser = require("cookie-parser");
 require("dotenv").config();
 
-// middleware
+const app = express();
+const port = process.env.PORT || 3000;
+
+// 1. Middleware
 app.use(
   cors({
     origin: [
@@ -17,6 +19,24 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(cookieParser());
+
+// 2. Custom Verify Token Middleware
+const verifyToken = (req, res, next) => {
+  const token = req?.cookies?.token;
+  
+  if (!token) {
+    return res.status(401).send({ message: "Unauthorized access: No token found" });
+  }
+
+  jwt.verify(token, process.env.JWT_ACCESS_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(401).send({ message: "Unauthorized access: Invalid token" });
+    }
+    req.user = decoded; // টোকেন থেকে পাওয়া ডেটা রিকোয়েস্টে সেট করা
+    next();
+  });
+};
 
 // MongoDB Connection URI
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@mordancluster.s5spyh0.mongodb.net/?appName=MordanCluster`;
@@ -32,15 +52,14 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect to MongoDB
-    await client.connect();
+    // await client.connect(); // প্রোডাকশনে এটি অনেক সময় দরকার হয় না
 
-    // ডাটবেজ এবং কালেকশন ডিফাইন করা
     const db = client.db("careerCode");
     const jobCollection = db.collection("jobs");
     const applicationCollection = db.collection("job_applications");
     const jobPostCollection = db.collection("job_post");
 
-    // jwt token related api
+    // --- Auth Related APIs (JWT) ---
     app.post("/jwt", async (req, res) => {
       const { email } = req.body;
       const user = { email };
@@ -50,154 +69,113 @@ async function run() {
 
       res.cookie("token", token, {
         httpOnly: true,
-        secure: true,
-        sameSite: "None",
-        maxAge: 60 * 60 * 1000, // 1 hour
-      });
-
-      res.send({ success: true });
+        secure: process.env.NODE_ENV === "production", // প্রোডাকশনে শুধু true হবে
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+        maxAge: 3600000, // 1 hour
+      })
+      .send({ success: true });
     });
 
-    // ১. সবগুলো জব পাওয়ার এপিআই
+    app.post("/logout", (req, res) => {
+      res.clearCookie("token", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+      })
+      .send({ success: true });
+    });
+
+    // --- Job Related APIs ---
     app.get("/jobs", async (req, res) => {
-      const cursor = jobCollection.find();
-      const result = await cursor.toArray();
+      const result = await jobCollection.find().toArray();
       res.send(result);
     });
 
-    // ২. নির্দিষ্ট একটি জব পাওয়ার এপিআই (Main Jobs collection থেকে)
     app.get("/jobs/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        if (!ObjectId.isValid(id)) {
-          return res.status(400).send({ error: "Invalid ID format" });
-        }
-        const query = { _id: new ObjectId(id) };
-        const result = await jobCollection.findOne(query);
-        if (!result) {
-          return res.status(404).send({ message: "Job not found" });
-        }
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "Internal Server Error" });
-      }
+      const id = req.params.id;
+      if (!ObjectId.isValid(id)) return res.status(400).send({ error: "Invalid ID" });
+      const result = await jobCollection.findOne({ _id: new ObjectId(id) });
+      res.send(result);
     });
 
-    // ৩. জব অ্যাপ্লিকেশন সংক্রান্ত এপিআই
+    // --- Job Application APIs (Secured) ---
     app.post("/job-applications", async (req, res) => {
-      try {
-        const application = req.body;
-        const result = await applicationCollection.insertOne(application);
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "Failed to submit application" });
-      }
+      const application = req.body;
+      const result = await applicationCollection.insertOne(application);
+      res.send(result);
     });
 
-    app.get("/job-applications", async (req, res) => {
-      try {
-        const cursor = applicationCollection.find();
-        const result = await cursor.toArray();
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "Failed to fetch application" });
+    // নির্দিষ্ট ইউজারের আবেদনগুলো দেখার এপিআই (Verify Token যুক্ত)
+    app.get("/job-applications", verifyToken, async (req, res) => {
+      const email = req.query.email;
+      const decodedEmail = req.user?.email;
+
+      // সিকিউরিটি চেক: টোকেনের ইমেইল আর কুয়েরি ইমেইল এক কি না
+      if (email !== decodedEmail) {
+        return res.status(403).send({ message: "Forbidden access" });
       }
+
+      const query = { email: email };
+      const result = await applicationCollection.find(query).toArray();
+      
+      // ডাটা এনরিচমেন্ট: প্রতিটি অ্যাপ্লিকেশনের সাথে জবের নাম ও ডিটেইলস যোগ করা
+      for(const application of result){
+         const query2 = { _id: new ObjectId(application.job_id) };
+         const job = await jobCollection.findOne(query2);
+         if(job){
+            application.title = job.title;
+            application.company = job.company;
+            application.location = job.location;
+            application.company_logo = job.company_logo;
+         }
+      }
+
+      res.send(result);
     });
 
-    app.delete("/job-applications/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        const query = { _id: new ObjectId(id) };
-        const result = await applicationCollection.deleteOne(query);
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "Failed to delete application" });
-      }
+    app.delete("/job-applications/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const result = await applicationCollection.deleteOne({ _id: new ObjectId(id) });
+      res.send(result);
     });
 
-    // ৪. জব পোস্ট (নতুন জব অ্যাড করা)
-    app.post("/job-post", async (req, res) => {
-      try {
-        const jobPost = req.body;
-        const result = await jobPostCollection.insertOne(jobPost);
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "Failed to submit Job Post" });
-      }
+    // --- Job Post APIs (Admin/Recruiter) ---
+    app.post("/job-post", verifyToken, async (req, res) => {
+      const result = await jobPostCollection.insertOne(req.body);
+      res.send(result);
     });
 
-    // ৫. সব জব পোস্ট পাওয়া
     app.get("/job-post", async (req, res) => {
-      try {
-        const cursor = jobPostCollection.find();
-        const result = await cursor.toArray();
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "Failed to fetch Job Post" });
-      }
+      const result = await jobPostCollection.find().toArray();
+      res.send(result);
     });
 
-    // ৬. নির্দিষ্ট একটি জব পোস্ট পাওয়া (আপডেট পেজের ডাটা দেখানোর জন্য এটি মাস্ট লাগবে)
     app.get("/job-post/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        if (!ObjectId.isValid(id)) {
-          return res.status(400).send({ error: "Invalid ID format" });
-        }
-        const query = { _id: new ObjectId(id) };
-        const result = await jobPostCollection.findOne(query);
-        if (!result) {
-          return res.status(404).send({ message: "Job post not found" });
-        }
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "Failed to fetch job post" });
-      }
+      const id = req.params.id;
+      const result = await jobPostCollection.findOne({ _id: new ObjectId(id) });
+      res.send(result);
     });
 
-    // ৭. নির্দিষ্ট জব পোস্ট আপডেট করা
-    app.patch("/job-post/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        const updatedData = req.body;
-        const filter = { _id: new ObjectId(id) };
-        const updateDoc = {
-          $set: {
-            title: updatedData.title,
-            company: updatedData.company,
-            category: updatedData.category,
-            jobType: updatedData.jobType,
-            salary: updatedData.salary,
-            location: updatedData.location,
-            description: updatedData.description,
-          },
-        };
-        const result = await jobPostCollection.updateOne(filter, updateDoc);
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "Failed to update job" });
-      }
+    app.patch("/job-post/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = { $set: updatedData };
+      const result = await jobPostCollection.updateOne(filter, updateDoc);
+      res.send(result);
     });
 
-    // ৮. নির্দিষ্ট জব পোস্ট ডিলিট করা (এটি আপনার ব্যাকএন্ডে যোগ করুন)
-    app.delete("/job-post/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        const query = { _id: new ObjectId(id) };
-        const result = await jobPostCollection.deleteOne(query);
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "Failed to delete job post" });
-      }
+    app.delete("/job-post/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const result = await jobPostCollection.deleteOne({ _id: new ObjectId(id) });
+      res.send(result);
     });
 
     // MongoDB Connection Confirmation
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    console.log("Successfully connected to MongoDB!");
   } catch (error) {
-    console.error("MongoDB Connection Error:", error);
+    console.error("MongoDB Error:", error);
   }
 }
 
