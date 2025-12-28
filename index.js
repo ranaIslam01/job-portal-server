@@ -2,6 +2,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 const app = express();
 const port = process.env.PORT || 3000;
 require("dotenv").config();
@@ -17,6 +18,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(cookieParser())
 
 // MongoDB Connection URI
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@mordancluster.s5spyh0.mongodb.net/?appName=MordanCluster`;
@@ -41,13 +43,19 @@ async function run() {
     const jobPostCollection = db.collection("job_post");
 
     // jwt token related api
-    app.post('/jwt', async(req,res) => {
+    app.post("/jwt", async (req, res) => {
       const userInfo = req.body;
       const token = jwt.sign(userInfo, process.env.JWT_ACCESS_SECRET, {
-        expiresIn: "2h"
+        expiresIn: "2h",
+      });
+
+      res.cookie('token', token,{
+        httpOnly: true,
+        secure:false
       })
-      res.send({success: true})
-    })
+
+      res.send({ success: true });
+    });
 
     //   res.cookie("token", token, {
     //     httpOnly: true,
