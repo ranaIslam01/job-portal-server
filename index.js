@@ -1,8 +1,6 @@
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
 const cors = require("cors");
-const jwt = require("jsonwebtoken");
-const cookieParser = require("cookie-parser");
 const app = express();
 const port = process.env.PORT || 3000;
 require("dotenv").config();
@@ -18,7 +16,6 @@ app.use(
   })
 );
 app.use(express.json());
-app.use(cookieParser())
 
 // MongoDB Connection URI
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@mordancluster.s5spyh0.mongodb.net/?appName=MordanCluster`;
@@ -43,33 +40,10 @@ async function run() {
     const jobPostCollection = db.collection("job_post");
 
     // jwt token related api
-    app.post("/jwt", async (req, res) => {
-      const userInfo = req.body;
-      const token = jwt.sign(userInfo, process.env.JWT_ACCESS_SECRET, {
-        expiresIn: "2h",
-      });
-
-      res.cookie('token', token,{
-        httpOnly: true,
-        secure:false
-      })
-
-      res.send({ success: true });
-    });
-
-    //   res.cookie("token", token, {
-    //     httpOnly: true,
-    //     secure: true,
-    //     sameSite: "None",
-    //     maxAge: 60 * 60 * 1000, // 1 hour
-    //   });
-
-    //   res.send({ success: true });
-    // });
 
     // ১. সবগুলো জব পাওয়ার এপিআই
     app.get("/jobs", async (req, res) => {
-      const cursor = jobCollection.find();
+      const cursor = jobCollection.find().sort({ _id: -1 });
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -105,7 +79,13 @@ async function run() {
 
     app.get("/job-applications", async (req, res) => {
       try {
-        const cursor = applicationCollection.find();
+        const email = req.query.email;
+        let query = {};
+        if (email) {
+          query = { applicant_email: email };
+        }
+
+        const cursor = applicationCollection.find(query).sort({ _id: -1 });
         const result = await cursor.toArray();
         res.send(result);
       } catch (error) {
@@ -138,7 +118,12 @@ async function run() {
     // ৫. সব জব পোস্ট পাওয়া
     app.get("/job-post", async (req, res) => {
       try {
-        const cursor = jobPostCollection.find();
+        const email = req.query.email; // ইমেইল ধরুন
+        let query = {};
+        if (email) {
+          query = { hr_email: email };
+        }
+        const cursor = jobPostCollection.find(query).sort({ _id: -1 });
         const result = await cursor.toArray();
         res.send(result);
       } catch (error) {
@@ -166,26 +151,16 @@ async function run() {
 
     // ৭. নির্দিষ্ট জব পোস্ট আপডেট করা
     app.patch("/job-post/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        const updatedData = req.body;
-        const filter = { _id: new ObjectId(id) };
-        const updateDoc = {
-          $set: {
-            title: updatedData.title,
-            company: updatedData.company,
-            category: updatedData.category,
-            jobType: updatedData.jobType,
-            salary: updatedData.salary,
-            location: updatedData.location,
-            description: updatedData.description,
-          },
-        };
-        const result = await jobPostCollection.updateOne(filter, updateDoc);
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "Failed to update job" });
-      }
+      const id = req.params.id;
+      const updatedData = req.body;
+      const filter = { _id: new ObjectId(id) };
+
+      const updateDoc = {
+        $set: { ...updatedData },
+      };
+
+      const result = await jobPostCollection.updateOne(filter, updateDoc);
+      res.send(result);
     });
 
     // ৮. নির্দিষ্ট জব পোস্ট ডিলিট করা (এটি আপনার ব্যাকএন্ডে যোগ করুন)
