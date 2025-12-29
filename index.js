@@ -53,16 +53,16 @@ async function run() {
       try {
         const id = req.params.id;
         if (!ObjectId.isValid(id)) {
-          return res.status(400).send({ error: "Invalid ID format" });
+          return res.status(400).send({ error: "অবৈধ ID ফরম্যাট" });
         }
         const query = { _id: new ObjectId(id) };
         const result = await jobCollection.findOne(query);
         if (!result) {
-          return res.status(404).send({ message: "Job not found" });
+          return res.status(404).send({ message: "জব পাওয়া যায়নি" });
         }
         res.send(result);
       } catch (error) {
-        res.status(500).send({ error: "Internal Server Error" });
+        res.status(500).send({ error: "সার্ভার ত্রুটি" });
       }
     });
 
@@ -73,7 +73,7 @@ async function run() {
         const result = await applicationCollection.insertOne(application);
         res.send(result);
       } catch (error) {
-        res.status(500).send({ error: "Failed to submit application" });
+        res.status(500).send({ error: "আবেদন জমা দিতে ব্যর্থ" });
       }
     });
 
@@ -89,7 +89,7 @@ async function run() {
         const result = await cursor.toArray();
         res.send(result);
       } catch (error) {
-        res.status(500).send({ error: "Failed to fetch application" });
+        res.status(500).send({ error: "আবেদন আনতে ব্যর্থ" });
       }
     });
 
@@ -100,7 +100,7 @@ async function run() {
         const result = await applicationCollection.deleteOne(query);
         res.send(result);
       } catch (error) {
-        res.status(500).send({ error: "Failed to delete application" });
+        res.status(500).send({ error: "আবেদন মুছতে ব্যর্থ" });
       }
     });
 
@@ -111,7 +111,7 @@ async function run() {
         const result = await jobPostCollection.insertOne(jobPost);
         res.send(result);
       } catch (error) {
-        res.status(500).send({ error: "Failed to submit Job Post" });
+        res.status(500).send({ error: "জব পোস্ট জমা দিতে ব্যর্থ" });
       }
     });
 
@@ -127,7 +127,7 @@ async function run() {
         const result = await cursor.toArray();
         res.send(result);
       } catch (error) {
-        res.status(500).send({ error: "Failed to fetch Job Post" });
+        res.status(500).send({ error: "জব পোস্ট আনতে ব্যর্থ" });
       }
     });
 
@@ -136,16 +136,16 @@ async function run() {
       try {
         const id = req.params.id;
         if (!ObjectId.isValid(id)) {
-          return res.status(400).send({ error: "Invalid ID format" });
+          return res.status(400).send({ error: "অবৈধ ID ফরম্যাট" });
         }
         const query = { _id: new ObjectId(id) };
         const result = await jobPostCollection.findOne(query);
         if (!result) {
-          return res.status(404).send({ message: "Job post not found" });
+          return res.status(404).send({ message: "জব পোস্ট পাওয়া যায়নি" });
         }
         res.send(result);
       } catch (error) {
-        res.status(500).send({ error: "Failed to fetch job post" });
+        res.status(500).send({ error: "জব পোস্ট আনতে ব্যর্থ" });
       }
     });
 
@@ -171,26 +171,24 @@ async function run() {
         const result = await jobPostCollection.deleteOne(query);
         res.send(result);
       } catch (error) {
-        res.status(500).send({ error: "Failed to delete job post" });
+        res.status(500).send({ error: "জব পোস্ট মুছতে ব্যর্থ" });
       }
     });
 
     // MongoDB Connection Confirmation
     await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    console.log("MongoDB-তে সফলভাবে সংযুক্ত হয়েছে!");
   } catch (error) {
-    console.error("MongoDB Connection Error:", error);
+    console.error("MongoDB সংযোগ ত্রুটি:", error);
   }
 }
 
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
-  res.send("Job Portal Server is Running...");
+  res.send("জব পোর্টাল সার্ভার চলছে...");
 });
 
 app.listen(port, () => {
-  console.log(`Server is listening on port ${port}`);
+  console.log(`সার্ভার ${port} পোর্টে শুনছে`);
 });
