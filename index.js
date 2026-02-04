@@ -33,7 +33,7 @@ async function run() {
     // Connect to MongoDB
     await client.connect();
 
-    // ডাটবেজ এবং কালেকশন ডিফাইন করা
+    // Database collection
     const db = client.db("careerCode");
     const jobCollection = db.collection("jobs");
     const applicationCollection = db.collection("job_applications");
@@ -41,14 +41,14 @@ async function run() {
 
     // jwt token related api
 
-    // ১. সবগুলো জব পাওয়ার এপিআই
+    //All job api
     app.get("/jobs", async (req, res) => {
       const cursor = jobCollection.find().sort({ _id: -1 });
       const result = await cursor.toArray();
       res.send(result);
     });
 
-    // ২. নির্দিষ্ট একটি জব পাওয়ার এপিআই (Main Jobs collection থেকে)
+    // Specific job api
     app.get("/jobs/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -66,7 +66,7 @@ async function run() {
       }
     });
 
-    // ৩. জব অ্যাপ্লিকেশন সংক্রান্ত এপিআই
+    // Job application api
     app.post("/job-applications", async (req, res) => {
       try {
         const application = req.body;
@@ -104,7 +104,7 @@ async function run() {
       }
     });
 
-    // ৪. জব পোস্ট (নতুন জব অ্যাড করা)
+    // Job post api 
     app.post("/job-post", async (req, res) => {
       try {
         const jobPost = req.body;
@@ -115,10 +115,10 @@ async function run() {
       }
     });
 
-    // ৫. সব জব পোস্ট পাওয়া
+    // All job post api 
     app.get("/job-post", async (req, res) => {
       try {
-        const email = req.query.email; // ইমেইল ধরুন
+        const email = req.query.email;
         let query = {};
         if (email) {
           query = { hr_email: email };
@@ -131,7 +131,7 @@ async function run() {
       }
     });
 
-    // ৬. নির্দিষ্ট একটি জব পোস্ট পাওয়া (আপডেট পেজের ডাটা দেখানোর জন্য এটি মাস্ট লাগবে)
+    // Specific job post api 
     app.get("/job-post/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -149,7 +149,7 @@ async function run() {
       }
     });
 
-    // ৭. নির্দিষ্ট জব পোস্ট আপডেট করা
+    // ৭.Specific jost post update api 
     app.patch("/job-post/:id", async (req, res) => {
       const id = req.params.id;
       const updatedData = req.body;
@@ -163,7 +163,7 @@ async function run() {
       res.send(result);
     });
 
-    // ৮. নির্দিষ্ট জব পোস্ট ডিলিট করা (এটি আপনার ব্যাকএন্ডে যোগ করুন)
+    // Specific job post delete api 
     app.delete("/job-post/:id", async (req, res) => {
       try {
         const id = req.params.id;
